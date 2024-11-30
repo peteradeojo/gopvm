@@ -62,8 +62,6 @@ func (c *Config) ReadConfig(configFile *os.File) {
 		panic("Unable to read config")
 	}
 
-	fmt.Printf("%v\n", data)
-
 	err = json.Unmarshal(data, c)
 	if err != nil {
 		fmt.Println(err)
