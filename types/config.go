@@ -51,18 +51,19 @@ func (c *Config) MakeDirs() {
 	}
 }
 
-func (c *Config) ReadConfig(configFile *os.File) {
-	c.SetFile(configFile)
-
-	var data []byte
-
-	_, err := configFile.Read(data)
-	if err != nil {
-		log.Println(err)
-		panic("Unable to read config")
+func (c *Config) ReadConfig(filename *string) {
+	configFile := ".pvm/config"
+	if filename != nil {
+		configFile = *filename
 	}
 
-	err = json.Unmarshal(data, c)
+	configData, err := os.ReadFile(configFile)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	err = json.Unmarshal(configData, c)
 	if err != nil {
 		fmt.Println(err)
 		cwd, _ := os.Getwd()

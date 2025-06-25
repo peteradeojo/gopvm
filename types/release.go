@@ -46,6 +46,7 @@ type Release struct {
 	Source            []Source `json:"source"`
 	SupportedVersions []string `json:"supported_versions"`
 	Version           string   `json:"version"`
+	Date              string   `json:"date"`
 }
 
 type ReleaseData map[string]Release

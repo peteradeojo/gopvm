@@ -20,7 +20,7 @@ Getting libiconv errors in build stage?
 ```sh
 # MacOs
 $ brew install libiconv
-$ export ICONV_DIR="/usr/local/opt/libiconv/"
+$ echo 'export ICONV_DIR="/usr/local/opt/libiconv/"' >> ~/.zshrc // or .bashrc
 ```
 
 # TODO:

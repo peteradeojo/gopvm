@@ -21,35 +21,35 @@ var (
 	versionFlag bool
 	installFlag string
 	useFlag     string
+	extFlag     string
 )
 
 var AppConfig *types.Config
 
 func main() {
+	flag.BoolVar(&versionFlag, "versions", false, "Get PHP Versions")
+	flag.StringVar(&useFlag, "use", "", "Switch PHP Versions")
+	flag.StringVar(&installFlag, "install", "", "Install PHP version")
+	flag.StringVar(&extFlag, "ext", "", "Install PHP extensions")
+
+	flag.Parse()
+
 	runtime.GOMAXPROCS(8)
-	// home, err := os.UserHomeDir()
-	// if err != nil {
-	// 	panic(err)
-	// }
 
-	// err = os.Chdir(home + "/.pvm")
-	// log.Println(err)
+	// Setup config file
+	AppConfig = &types.Config{}
 
-	configFile := loadConfigFile(nil)
+	configFilename := ".pvm/config"
+	configFile := loadConfigFile(&configFilename)
+
+	AppConfig.SetFile(configFile)
 	defer configFile.Close()
 
-	AppConfig = &types.Config{}
-	AppConfig.ReadConfig(configFile)
+	AppConfig.ReadConfig(&configFilename)
 
 	AppConfig.MakeDirs()
 
 	defer AppConfig.Save()
-
-	flag.BoolVar(&versionFlag, "version", false, "Get PHP Versions")
-	flag.StringVar(&useFlag, "use", "", "Switch PHP Versions")
-	flag.StringVar(&installFlag, "install", "", "Install PHP version")
-
-	flag.Parse()
 
 	if versionFlag {
 		fetchVersions()
@@ -59,6 +59,8 @@ func main() {
 	if useFlag != "" {
 		v := prepareVersion(useFlag)
 		useVersion(v)
+
+		installPear(v)
 		return
 	}
 
@@ -94,6 +96,11 @@ func main() {
 		AppConfig.InstalledVersions = append(AppConfig.InstalledVersions, v)
 		return
 	}
+
+	// extensions flag
+	if extFlag != "" {
+		FindPackage(extFlag)
+	}
 }
 
 func BootstrapAppDir(dir string) {
@@ -105,7 +112,7 @@ func loadConfigFile(fileName *string) *os.File {
 		defaultConfig := "./.pvm/config.json"
 		fileName = &defaultConfig
 
-		if exists, _ := util.CheckDirExists("./pvm"); !exists {
+		if exists, _ := util.CheckDirExists("./.pvm"); !exists {
 			os.Mkdir(".pvm", 0777)
 		}
 	}
@@ -113,7 +120,7 @@ func loadConfigFile(fileName *string) *os.File {
 	file, err := os.OpenFile(*fileName, os.O_RDWR|os.O_CREATE, 0644)
 
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	return file
@@ -179,7 +186,7 @@ func fetchVersions() {
 
 func displayVersions(release types.ReleaseData) {
 	for _, r := range release {
-		fmt.Printf("Version: %s\n", r.Version)
+		fmt.Printf("Version: %s - Date: %s\n", r.Version, r.Date)
 		if len(r.SupportedVersions) > 0 {
 			fmt.Println("Supported Versions:")
 			for _, s := range r.SupportedVersions {
@@ -291,7 +298,8 @@ func configureDist(location string) (string, error) {
 	if c, _ := util.CheckFileExists("./Makefile"); !c { // Makefile doesn't exist, ./configure hasn't been run
 		iconvDir := os.Getenv("ICONV_DIR")
 
-		var installArgs []string
+		// Setup install args to install basic useful extensions
+		var installArgs []string = []string{"--enable-calendar", "--enable-bcmath", "--enable-exif", "--enable-ftp", "--enable-mbstring", "--enable-soap", "--enable-sockets", "--enable-shmop", "--enable-sysvsem", "--enable-sysvshm", "--enable-pcntl", "--enable-phar", "--enable-opcache", "--with-curl", "--with-openssl", "--with-zlib", "--with-mysqli", "--with-pdo-mysql", "--with-pdo-sqlite", "--with-zip", "--with-jpeg", "--with-freetype", "--with-gettext"}
 
 		if iconvDir != "" {
 			installArgs = append(installArgs, fmt.Sprintf("--with-iconv=%v", iconvDir))
@@ -345,7 +353,45 @@ func linkVersion(location string) error {
 		return err
 	}
 
+	// cmd = prepareCommand("ln", "-s", "-F", fmt.Sprintf("%+s/php.ini-development", location), "/usr/local/lib/php.ini")
+
+	// err = cmd.Run()
+
 	cmd = prepareCommand("ln", "-s", "-F", fmt.Sprintf("%+s/php.ini-development", location), "/usr/local/lib/php.ini")
 	err = cmd.Run()
+	return err
+}
+
+func installPear(version string) error {
+	location := resolveReleaseToInstallDir(version)
+
+	fmt.Println(os.Getwd())
+
+	prepareCommand("rm", "/usr/local/bin/pear").Run()
+	prepareCommand("rm", "/usr/local/etc/pear.conf").Run()
+	prepareCommand("rm", "-rf", "/usr/local/lib/php/pear").Run()
+
+	cmd := prepareCommand(
+		"php", fmt.Sprintf("%s/pear/install-pear-nozlib.phar", location),
+		"-d", "include_path=/tmp/pear/temp",
+		"-d", fmt.Sprintf("php_dir=$(pwd)/install/php-%+s/lib/php", version),
+		"-d", fmt.Sprintf("doc_dir=$(pwd)/install/php-%+s/lib/php/doc", version),
+		"-d", fmt.Sprintf("bin_dir=$(pwd)/install/php-%+s/bin", version),
+		"-d", fmt.Sprintf("data_dir=$(pwd)/install/php-%+s/lib/php/data", version),
+		"-d", fmt.Sprintf("cfg_dir=$(pwd)/install/php-%+s/lib/php/cfg", version),
+		"-d", fmt.Sprintf("www_dir=$(pwd)/install/php-%+s/lib/php/htdocs", version),
+		"-d", fmt.Sprintf("test_dir=$(pwd)/install/php-%+s/lib/php/test", version),
+		"-d", "temp_dir=/tmp/pear/temp",
+	)
+	err := cmd.Run()
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// pharLocation := fmt.Sprintf("%s/pear/go-pear.phar", location)
+
+	// cmd := prepareCommand("wget", "http://pear.php.net/go-pear.phar", "-O", pharLocation)
+	// err := cmd.Run()
 	return err
 }
